@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>유튜브 간단 분석 도구 (HTML 단일 파일)</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#121821; --muted:#8aa0b4; --text:#e8f0f8; --accent:#4cc9f0; --accent2:#80ffea; --danger:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b0f14,#0e141b 40%,#0b0f14);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Pretendard,Apple SD Gothic Neo,Noto Sans KR,Helvetica,Arial,sans-serif}
+    header{position:sticky;top:0;background:rgba(11,15,20,.8);backdrop-filter:blur(10px);z-index:10;border-bottom:1px solid #1e2a38}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    h1{font-size:22px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+    .badge{font-size:12px;color:#0b0f14;background:linear-gradient(135deg,var(--accent),var(--accent2));padding:2px 8px;border-radius:999px}
+    .controls{display:grid;grid-template-columns:1.3fr .8fr .8fr .8fr .6fr auto;gap:10px;align-items:end}
+    .control{display:flex;flex-direction:column;gap:6px}
+    .filter-section{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-top:15px;padding:20px;background:rgba(15,21,32,.5);border-radius:12px;border:1px solid #223140}
+    .filter-item{display:flex;flex-direction:column;gap:10px}
+    .filter-item label{font-size:13px;color:var(--text);font-weight:600}
+    .range-container{position:relative;width:100%;height:6px;margin:15px 0}
+    .range-slider{position:absolute;width:100%;height:6px;border-radius:3px;background:transparent;outline:none;appearance:none;-webkit-appearance:none;pointer-events:none;z-index:2}
+    .range-slider:first-of-type{z-index:3}
+    .range-slider::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#22d3ee);cursor:pointer;box-shadow:0 2px 6px rgba(37,99,235,.4);pointer-events:all;position:relative;z-index:4}
+    .range-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#22d3ee);cursor:pointer;border:none;box-shadow:0 2px 6px rgba(37,99,235,.4);pointer-events:all}
+    .range-slider::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:transparent}
+    .range-slider::-moz-range-track{height:6px;border-radius:3px;background:transparent}
+    .range-slider-track{position:absolute;top:50%;left:0;right:0;height:6px;background:#223140;border-radius:3px;transform:translateY(-50%);z-index:1}
+    .range-inputs{display:flex;gap:10px;align-items:center}
+    .range-inputs input{flex:1;text-align:center}
+    label{font-size:12px;color:var(--muted)}
+    input[type="text"], input[type="number"], select{background:#0f1520;border:1px solid #223140;color:var(--text);padding:10px 12px;border-radius:12px;outline:none}
+    input[type="text"]::placeholder, input[type="number"]::placeholder{color:#6c8399}
+    .btn{border:0;background:linear-gradient(135deg,#2563eb,#22d3ee);color:#06121a;padding:11px 16px;border-radius:14px;font-weight:700;cursor:pointer}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-secondary{background:#182333;color:var(--text);border:1px solid #223140}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .statbar{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:12px;margin-top:10px}
+    .chip{background:#0f1520;border:1px solid #223140;color:#bcd1e6;padding:4px 8px;border-radius:999px}
+    .grid{margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    @media (max-width:1100px){.controls{grid-template-columns:1.2fr .9fr .9fr .9fr .8fr auto}.grid{grid-template-columns:repeat(3,1fr)}}
+    @media (max-width:800px){.controls{grid-template-columns:1fr 1fr}.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:520px){.grid{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,#101724,#0b111a);border:1px solid #1f2c3b;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+    .thumb{position:relative;aspect-ratio:16/9;background:#0a0f15}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .duration{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.7);padding:2px 6px;border-radius:6px;font-size:12px}
+    .content{padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px}
+    .title{font-size:14px;line-height:1.35;font-weight:700}
+    .meta{font-size:12px;color:#a9bed3;display:flex;flex-wrap:wrap;gap:8px}
+    .meta b{color:#d6e7f7}
+    .actions{display:flex;gap:8px;margin-top:8px}
+    a.btn-link{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #243246;border-radius:10px;color:#bfe8ff;text-decoration:none}
+    footer{opacity:.8;color:#99acc1;padding:20px 0}
+    .loading{animation:pulse 1.2s infinite ease-in-out}
+    @keyframes pulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
+    .error{color:var(--danger)}
+    .small{font-size:11px;color:#93a8bd}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>유튜브 분석 도구 <span class="badge">HTML · 무설치</span></h1>
+      <div class="controls" id="controls">
+        <div class="control" title="YouTube Data API v3 키를 입력하세요 (브라우저에만 저장)">
+          <label>API 키</label>
+          <input id="apiKey" type="text" placeholder="예) AIza... (YouTube Data API v3)" />
+        </div>
+        <div class="control">
+          <label>검색어</label>
+          <input id="query" type="text" placeholder="예) 갤럭시 S25 후기" />
+        </div>
+        <div class="control">
+          <label>국가</label>
+          <select id="country"></select>
+        </div>
+        <div class="control">
+          <label>기간</label>
+          <select id="timeRange">
+            <option value="any">전체</option>
+            <option value="7">최근 1주</option>
+            <option value="14">최근 2주</option>
+            <option value="21">최근 3주</option>
+            <option value="28">최근 4주</option>
+            <option value="30">최근 1개월</option>
+            <option value="365">최근 1년</option>
+          </select>
+        </div>
+        <div class="control">
+          <label>정렬</label>
+          <select id="sortBy">
+            <option value="viewsDesc">조회수 ↓</option>
+            <option value="viewsAsc">조회수 ↑</option>
+            <option value="subsDesc">구독자수 ↓</option>
+            <option value="subsAsc">구독자수 ↑</option>
+            <option value="dateDesc">업로드일 ↓</option>
+            <option value="dateAsc">업로드일 ↑</option>
+            <option value="titleAsc">제목 A→Z</option>
+            <option value="titleDesc">제목 Z→A</option>
+          </select>
+        </div>
+        <div class="control">
+          <button id="searchBtn" class="btn">검색</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-item">
+          <label>Views</label>
+          <div class="range-container">
+            <div class="range-slider-track"></div>
+            <input type="range" id="viewRangeMin" class="range-slider" min="0" max="10000000" value="30000" step="10000" />
+            <input type="range" id="viewRangeMax" class="range-slider" min="0" max="10000000" value="10000000" step="10000" />
+          </div>
+          <div class="range-inputs">
+            <input id="viewMin" type="number" min="0" max="10000000" value="30000" />
+            <span style="color:var(--muted)">~</span>
+            <input id="viewMax" type="number" min="0" max="10000000" value="10000000" />
+          </div>
+        </div>
+        <div class="filter-item">
+          <label>Subscribers</label>
+          <div class="range-container">
+            <div class="range-slider-track"></div>
+            <input type="range" id="subRangeMin" class="range-slider" min="0" max="10000000" value="0" step="10000" />
+            <input type="range" id="subRangeMax" class="range-slider" min="0" max="10000000" value="10000" step="10000" />
+          </div>
+          <div class="range-inputs">
+            <input id="subMin" type="number" min="0" max="10000000" value="0" />
+            <span style="color:var(--muted)">~</span>
+            <input id="subMax" type="number" min="0" max="10000000" value="10000" />
+          </div>
+        </div>
+        <div class="filter-item">
+          <label>Views per hour</label>
+          <div class="range-container">
+            <div class="range-slider-track"></div>
+            <input type="range" id="vphRangeMin" class="range-slider" min="0" max="1000" value="500" step="10" />
+            <input type="range" id="vphRangeMax" class="range-slider" min="0" max="1000" value="1000" step="10" />
+          </div>
+          <div class="range-inputs">
+            <input id="vphMin" type="number" min="0" max="1000" value="500" />
+            <span style="color:var(--muted)">~</span>
+            <input id="vphMax" type="number" min="0" max="1000" value="1000" />
+          </div>
+        </div>
+        <div style="grid-column:1/-1;display:flex;justify-content:flex-end;margin-top:10px">
+          <button id="resetFilters" class="btn btn-secondary" style="padding:8px 16px;font-size:13px">필터 초기화</button>
+        </div>
+      </div>
+      <div class="statbar" id="statbar">
+        <span class="chip" id="status">준비 완료</span>
+        <span class="chip">표시 수: <b id="count">0</b></span>
+        <span class="chip">총 조회수: <b id="totalViews">0</b></span>
+        <span class="chip">중앙값 조회수: <b id="medianViews">0</b></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="row" style="margin:10px 0 0">
+      <button id="prevBtn" class="btn btn-secondary" disabled>이전</button>
+      <button id="nextBtn" class="btn btn-secondary" disabled>다음</button>
+      <span class="small" id="pageInfo"></span>
+    </div>
+
+    <div id="results" class="grid" aria-live="polite"></div>
+
+    <footer>
+      <div class="small">Tip: API 키는 브라우저 <b>localStorage</b>에 저장됩니다. 안전을 위해 공개 배포 시에는 서버 프록시 사용을 권장합니다.</div>
+    </footer>
+  </main>
+
+<script>
+const els = {
+  apiKey: document.getElementById('apiKey'),
+  query: document.getElementById('query'),
+  country: document.getElementById('country'),
+  timeRange: document.getElementById('timeRange'),
+  sortBy: document.getElementById('sortBy'),
+  searchBtn: document.getElementById('searchBtn'),
+  results: document.getElementById('results'),
+  status: document.getElementById('status'),
+  count: document.getElementById('count'),
+  totalViews: document.getElementById('totalViews'),
+  medianViews: document.getElementById('medianViews'),
+  prevBtn: document.getElementById('prevBtn'),
+  nextBtn: document.getElementById('nextBtn'),
+  pageInfo: document.getElementById('pageInfo'),
+  viewMin: document.getElementById('viewMin'),
+  viewMax: document.getElementById('viewMax'),
+  viewRangeMin: document.getElementById('viewRangeMin'),
+  viewRangeMax: document.getElementById('viewRangeMax'),
+  subMin: document.getElementById('subMin'),
+  subMax: document.getElementById('subMax'),
+  subRangeMin: document.getElementById('subRangeMin'),
+  subRangeMax: document.getElementById('subRangeMax'),
+  vphMin: document.getElementById('vphMin'),
+  vphMax: document.getElementById('vphMax'),
+  vphRangeMin: document.getElementById('vphRangeMin'),
+  vphRangeMax: document.getElementById('vphRangeMax'),
+};
+
+// 국가 코드(자주 쓰는 국가 + KR 우선)
+const COUNTRIES = [
+  ['KR','대한민국'], ['US','미국'], ['JP','일본'], ['GB','영국'], ['DE','독일'], ['FR','프랑스'],
+  ['IN','인도'], ['ID','인도네시아'], ['VN','베트남'], ['TH','태국'], ['TW','대만'], ['HK','홍콩'],
+  ['BR','브라질'], ['MX','멕시코'], ['CA','캐나다'], ['AU','호주'], ['SG','싱가포르'], ['MY','말레이시아'],
+  ['PH','필리핀'], ['ES','스페인'], ['IT','이탈리아'], ['RU','러시아'], ['TR','튀르키예'], ['AE','UAE']
+];
+
+// 상태
+let pageToken = { prev: null, next: null, index: 0 };
+let lastQueryParams = null;
+
+function init(){
+  // 국가 옵션 렌더링
+  els.country.innerHTML = COUNTRIES.map(([code,name])=>`<option value="${code}">${name} (${code})</option>`).join('');
+  els.country.value = 'KR';
+
+  // 저장된 API 키 불러오기
+  const savedKey = localStorage.getItem('yt_api_key');
+  if(savedKey){ els.apiKey.value = savedKey }
+
+  els.searchBtn.addEventListener('click', ()=> runSearch());
+  els.nextBtn.addEventListener('click', ()=> paginate('next'));
+  els.prevBtn.addEventListener('click', ()=> paginate('prev'));
+
+  // Enter 키로 검색
+  els.query.addEventListener('keydown', e=>{ if(e.key==='Enter') runSearch() });
+
+  // 필터 초기화 버튼
+  const resetFiltersBtn = document.getElementById('resetFilters');
+  resetFiltersBtn.addEventListener('click', ()=>{
+    els.viewRangeMin.value = 0;
+    els.viewRangeMax.value = 10000000;
+    els.viewMin.value = 0;
+    els.viewMax.value = 10000000;
+    els.subRangeMin.value = 0;
+    els.subRangeMax.value = 10000000;
+    els.subMin.value = 0;
+    els.subMax.value = 10000000;
+    els.vphRangeMin.value = 0;
+    els.vphRangeMax.value = 1000;
+    els.vphMin.value = 0;
+    els.vphMax.value = 1000;
+  });
+
+  // 범위 슬라이더 이벤트
+  setupRangeSlider('view', 0, 10000000);
+  setupRangeSlider('sub', 0, 10000000);
+  setupRangeSlider('vph', 0, 1000);
+}
+
+function setupRangeSlider(prefix, min, max){
+  const rangeMin = els[`${prefix}RangeMin`];
+  const rangeMax = els[`${prefix}RangeMax`];
+  const inputMin = els[`${prefix}Min`];
+  const inputMax = els[`${prefix}Max`];
+
+  function updateFromSlider(e){
+    const minVal = parseInt(rangeMin.value);
+    const maxVal = parseInt(rangeMax.value);
+    if(minVal > maxVal){
+      if(e.target === rangeMin){
+        rangeMax.value = minVal;
+        inputMax.value = minVal;
+      } else {
+        rangeMin.value = maxVal;
+        inputMin.value = maxVal;
+      }
+    } else {
+      inputMin.value = minVal;
+      inputMax.value = maxVal;
+    }
+  }
+
+  function updateFromInput(e){
+    let minVal = parseInt(inputMin.value) || min;
+    let maxVal = parseInt(inputMax.value) || max;
+    minVal = Math.max(min, Math.min(max, minVal));
+    maxVal = Math.max(min, Math.min(max, maxVal));
+    if(minVal > maxVal){
+      if(e.target === inputMin){
+        maxVal = minVal;
+        inputMax.value = maxVal;
+      } else {
+        minVal = maxVal;
+        inputMin.value = minVal;
+      }
+    }
+    rangeMin.value = minVal;
+    rangeMax.value = maxVal;
+  }
+
+  rangeMin.addEventListener('input', updateFromSlider);
+  rangeMax.addEventListener('input', updateFromSlider);
+  inputMin.addEventListener('input', updateFromInput);
+  inputMax.addEventListener('input', updateFromInput);
+  inputMin.addEventListener('blur', ()=>{
+    if(!inputMin.value || parseInt(inputMin.value) < min) inputMin.value = min;
+    if(parseInt(inputMin.value) > parseInt(inputMax.value)) inputMin.value = inputMax.value;
+    rangeMin.value = inputMin.value;
+  });
+  inputMax.addEventListener('blur', ()=>{
+    if(!inputMax.value || parseInt(inputMax.value) > max) inputMax.value = max;
+    if(parseInt(inputMax.value) < parseInt(inputMin.value)) inputMax.value = inputMin.value;
+    rangeMax.value = inputMax.value;
+  });
+}
+
+function setStatus(msg, loading=false){
+  els.status.textContent = msg; 
+  els.status.className = loading ? 'chip loading' : 'chip';
+}
+
+function fmtNumber(n){
+  if(n==null) return '-';
+  return Number(n).toLocaleString('ko-KR');
+}
+function timeAgo(iso){
+  const d = new Date(iso); const diff = (Date.now()-d.getTime())/1000;
+  const units = [[31536000,'년'],[2592000,'개월'],[604800,'주'],[86400,'일'],[3600,'시간'],[60,'분']];
+  for(const [sec,label] of units){ if(diff>=sec) return `${Math.floor(diff/sec)}${label} 전`; }
+  return '방금 전';
+}
+
+async function ytFetch(endpoint, params){
+  const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
+  for(const [k,v] of Object.entries(params)) if(v!==undefined && v!==null) url.searchParams.set(k, v);
+  const res = await fetch(url.toString());
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error(`YouTube API 오류 ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+function getPublishedAfter(days){
+  if(days==='any') return null;
+  const d = new Date(); d.setDate(d.getDate()-Number(days));
+  return d.toISOString();
+}
+
+function calculateVPH(viewCount, publishedAt){
+  if(!viewCount || !publishedAt) return 0;
+  const now = new Date();
+  const published = new Date(publishedAt);
+  const hoursDiff = (now - published) / (1000 * 60 * 60);
+  if(hoursDiff <= 0) return 0;
+  return Math.round(Number(viewCount) / hoursDiff);
+}
+
+function applyFilters(items){
+  let filtered = [...items];
+  const originalCount = filtered.length;
+  
+  // 조회수 필터 (범위)
+  const viewMin = Number(els.viewMin.value) || 0;
+  const viewMax = Number(els.viewMax.value) || 10000000;
+  if(viewMin > 0 || viewMax < 10000000){
+    filtered = filtered.filter(x=>{
+      const views = Number(x.viewCount || 0);
+      return views >= viewMin && views <= viewMax;
+    });
+  }
+  
+  // 구독자 필터 (범위)
+  const subMin = Number(els.subMin.value) || 0;
+  const subMax = Number(els.subMax.value) || 10000000;
+  // 기본값이 아닐 때만 필터 적용 (0~10000000이면 필터 미적용)
+  const isSubFilterActive = !(subMin === 0 && subMax === 10000000);
+  if(isSubFilterActive){
+    filtered = filtered.filter(x=>{
+      // 구독자 수가 null이거나 undefined인 경우 처리
+      if(x.subscriberCount === null || x.subscriberCount === undefined){
+        // 구독자 수가 없으면 최소값이 0일 때만 통과 (0 이상이면 포함)
+        return subMin === 0;
+      }
+      const subs = Number(x.subscriberCount || 0);
+      return subs >= subMin && subs <= subMax;
+    });
+  }
+  
+  // VPH 필터 (범위)
+  const vphMin = Number(els.vphMin.value) || 0;
+  const vphMax = Number(els.vphMax.value) || 1000;
+  if(vphMin > 0 || vphMax < 1000){
+    filtered = filtered.filter(x=>{
+      const vph = calculateVPH(x.viewCount, x.publishedAt);
+      return vph >= vphMin && vph <= vphMax;
+    });
+  }
+  
+  return { filtered, originalCount, filteredCount: filtered.length };
+}
+
+function sortItems(items, mode){
+  const by = {
+    viewsDesc: (a,b)=> Number(b.viewCount)-Number(a.viewCount),
+    viewsAsc: (a,b)=> Number(a.viewCount)-Number(b.viewCount),
+    subsDesc: (a,b)=> Number(b.subscriberCount)-Number(a.subscriberCount),
+    subsAsc: (a,b)=> Number(a.subscriberCount)-Number(b.subscriberCount),
+    dateDesc: (a,b)=> new Date(b.publishedAt)-new Date(a.publishedAt),
+    dateAsc: (a,b)=> new Date(a.publishedAt)-new Date(b.publishedAt),
+    titleAsc: (a,b)=> a.title.localeCompare(b.title),
+    titleDesc: (a,b)=> b.title.localeCompare(a.title),
+  }[mode] || ((a,b)=>0);
+  return items.sort(by);
+}
+
+function render(items){
+  els.count.textContent = items.length;
+  const views = items.map(x=> Number(x.viewCount||0)).sort((a,b)=>a-b);
+  const total = views.reduce((s,n)=>s+n,0);
+  const median = views.length? (views[Math.floor((views.length-1)/2)] + views[Math.ceil((views.length-1)/2)]) / 2 : 0;
+  els.totalViews.textContent = fmtNumber(total);
+  els.medianViews.textContent = fmtNumber(Math.round(median));
+  els.results.innerHTML = items.map(x=> {
+    const vph = calculateVPH(x.viewCount, x.publishedAt);
+    const currentViewers = x.concurrentViewers;
+    return `
+    <article class="card">
+      <div class="thumb">
+        <img alt="썸네일" loading="lazy" src="https://i.ytimg.com/vi/${x.videoId}/hqdefault.jpg" />
+        <div class="duration">${x.duration || ''}</div>
+      </div>
+      <div class="content">
+        <div class="title">${x.title}</div>
+        <div class="meta">
+          <span>채널: <b>${x.channelTitle}</b></span>
+          <span>조회수: <b>${fmtNumber(x.viewCount)}</b></span>
+          <span>구독자: <b>${x.subscriberCount? fmtNumber(x.subscriberCount) : '-'}</b></span>
+          <span>VPH: <b>${fmtNumber(vph)}</b></span>
+          <span>현재 시청자: <b>${currentViewers ? fmtNumber(currentViewers) : '-'}</b></span>
+          <span>${timeAgo(x.publishedAt)}</span>
+        </div>
+        <div class="actions">
+          <a class="btn-link" href="https://www.youtube.com/watch?v=${x.videoId}" target="_blank" rel="noopener">영상 보기</a>
+          <a class="btn-link" href="https://www.youtube.com/channel/${x.channelId}" target="_blank" rel="noopener">채널 보기</a>
+        </div>
+      </div>
+    </article>
+  `;
+  }).join('');
+}
+
+function setPaging(info){
+  pageToken.prev = info.prevPageToken || null;
+  pageToken.next = info.nextPageToken || null;
+  els.prevBtn.disabled = !pageToken.prev;
+  els.nextBtn.disabled = !pageToken.next;
+  els.pageInfo.textContent = `페이지 ${pageToken.index+1}`;
+}
+
+async function runSearch(token){
+  try{
+    const key = els.apiKey.value.trim();
+    if(!key){ alert('먼저 YouTube Data API 키를 입력하세요.'); return; }
+    localStorage.setItem('yt_api_key', key);
+
+    const q = els.query.value.trim();
+    if(!q){ alert('검색어를 입력하세요.'); return; }
+
+    const regionCode = els.country.value;
+    const publishedAfter = getPublishedAfter(els.timeRange.value);
+
+    const params = {
+      q, regionCode, publishedAfter, token
+    };
+    lastQueryParams = params; // 페이징에 사용
+
+    setStatus('검색 중...', true);
+
+    // 1) search.list로 후보 영상 조회
+    let searchRes;
+    let allSearchItems = [];
+    let currentToken = token || null;
+    const targetCount = 1000; // 항상 1000개 가져오기
+    
+    // 1000개를 가져오기 위해 여러 번 요청 (API는 최대 50개씩만 반환)
+    while(allSearchItems.length < targetCount){
+      const remaining = targetCount - allSearchItems.length;
+      const requestCount = Math.min(remaining, 50);
+      
+      searchRes = await ytFetch('search', {
+        key, part:'snippet', type:'video', maxResults:requestCount,
+        q, regionCode,
+        ...(publishedAfter? { publishedAfter } : {}),
+        ...(currentToken? { pageToken: currentToken } : {})
+      });
+      
+      if(!searchRes.items?.length) break;
+      
+      allSearchItems = allSearchItems.concat(searchRes.items);
+      currentToken = searchRes.nextPageToken;
+      
+      // 다음 페이지가 없으면 중단
+      if(!currentToken) break;
+      
+      // 첫 검색이 아니면 한 번만 요청
+      if(token) break;
+      
+      // 진행 상황 업데이트
+      setStatus(`검색 중... (${allSearchItems.length}/${targetCount})`, true);
+    }
+    
+    // searchRes 객체 재구성 (페이징 정보 유지)
+    searchRes = {
+      items: allSearchItems,
+      nextPageToken: searchRes?.nextPageToken || null,
+      prevPageToken: token ? searchRes?.prevPageToken : null
+    };
+
+    setPaging(searchRes);
+
+    if(!searchRes.items?.length){
+      render([]); setStatus('결과 없음'); return;
+    }
+
+    // 2) videoIds & channelIds 수집
+    const videoIds = searchRes.items.map(i=> i.id.videoId).filter(Boolean);
+    const channelIds = [...new Set(searchRes.items.map(i=> i.snippet?.channelId).filter(Boolean))];
+
+    // 3) videos.list로 조회수/길이/라이브 정보 가져오기 (50개씩 나눠서 요청)
+    const videoStatMap = new Map();
+    const videoChunkSize = 50;
+    for(let i = 0; i < videoIds.length; i += videoChunkSize){
+      const chunk = videoIds.slice(i, i + videoChunkSize);
+      setStatus(`영상 정보 가져오는 중... (${Math.min(i + videoChunkSize, videoIds.length)}/${videoIds.length})`, true);
+      const videosRes = await ytFetch('videos', {
+        key, part:'statistics,contentDetails,liveStreamingDetails', id: chunk.join(',')
+      });
+      for(const v of (videosRes.items||[])){
+        videoStatMap.set(v.id, {
+          viewCount: v.statistics?.viewCount || 0,
+          duration: parseISO8601(v.contentDetails?.duration),
+          concurrentViewers: v.liveStreamingDetails?.concurrentViewers || null
+        });
+      }
+    }
+
+    // 4) channels.list로 구독자수 가져오기 (50개씩 나눠서 요청)
+    const chMap = new Map();
+    if(channelIds.length > 0){
+      const chunkSize = 50;
+      for(let i = 0; i < channelIds.length; i += chunkSize){
+        const chunk = channelIds.slice(i, i + chunkSize);
+        setStatus(`채널 정보 가져오는 중... (${Math.min(i + chunkSize, channelIds.length)}/${channelIds.length})`, true);
+        const chRes = await ytFetch('channels', {
+          key, part:'statistics', id: chunk.join(',')
+        });
+        for(const c of (chRes.items||[])){
+          const subCount = c.statistics?.hiddenSubscriberCount ? null : (c.statistics?.subscriberCount || null);
+          chMap.set(c.id, { subscriberCount: subCount });
+        }
+      }
+    }
+
+    // 5) 병합
+    const items = searchRes.items.map(i=>{
+      const stat = videoStatMap.get(i.id.videoId) || {};
+      const ch = chMap.get(i.snippet.channelId) || {};
+      return {
+        videoId: i.id.videoId,
+        channelId: i.snippet.channelId,
+        title: i.snippet.title,
+        channelTitle: i.snippet.channelTitle,
+        publishedAt: i.snippet.publishedAt,
+        viewCount: stat.viewCount || 0,
+        duration: stat.duration || '',
+        subscriberCount: ch.subscriberCount,
+        concurrentViewers: stat.concurrentViewers
+      }
+    });
+
+    // 6) 필터링 적용
+    const filterResult = applyFilters(items);
+    let filteredItems = filterResult.filtered;
+    
+    // 디버깅: 구독자 수 통계
+    const subStats = {
+      total: items.length,
+      withSubs: items.filter(x => x.subscriberCount !== null && x.subscriberCount !== undefined).length,
+      withoutSubs: items.filter(x => x.subscriberCount === null || x.subscriberCount === undefined).length,
+      inRange: items.filter(x => {
+        if(x.subscriberCount === null || x.subscriberCount === undefined) return false;
+        const subs = Number(x.subscriberCount || 0);
+        const subMin = Number(els.subMin.value) || 0;
+        const subMax = Number(els.subMax.value) || 10000000;
+        return subs >= subMin && subs <= subMax;
+      }).length
+    };
+    console.log('구독자 필터 통계:', subStats);
+
+    // 필터링 후 결과가 없을 때 알림
+    if(filteredItems.length === 0 && filterResult.originalCount > 0){
+      const subMin = Number(els.subMin.value) || 0;
+      const subMax = Number(els.subMax.value) || 10000000;
+      const viewMin = Number(els.viewMin.value) || 0;
+      const viewMax = Number(els.viewMax.value) || 10000000;
+      const vphMin = Number(els.vphMin.value) || 0;
+      const vphMax = Number(els.vphMax.value) || 1000;
+      
+      let filterInfo = [];
+      if(viewMin > 0 || viewMax < 10000000) filterInfo.push(`조회수: ${viewMin.toLocaleString()}~${viewMax.toLocaleString()}`);
+      if(subMin > 0 || subMax < 10000000) filterInfo.push(`구독자: ${subMin.toLocaleString()}~${subMax.toLocaleString()}`);
+      if(vphMin > 0 || vphMax < 1000) filterInfo.push(`VPH: ${vphMin}~${vphMax}`);
+      
+      setStatus(`필터 조건에 맞는 결과 없음 (전체 ${filterResult.originalCount}개 중 0개) - 필터를 완화해주세요`);
+      render([]);
+      els.results.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted)">
+        <div style="margin-bottom:10px;font-weight:600">필터 조건이 너무 엄격합니다.</div>
+        <div style="margin-bottom:10px">전체 ${filterResult.originalCount}개의 결과 중 조건에 맞는 영상이 없습니다.</div>
+        <div style="margin-bottom:15px;font-size:12px;color:var(--accent)">
+          현재 필터: ${filterInfo.join(', ')}
+        </div>
+        <div style="margin-bottom:10px;font-size:11px;color:var(--muted)">
+          구독자 수가 없는 채널: ${subStats.withoutSubs}개<br/>
+          구독자 수가 있는 채널: ${subStats.withSubs}개<br/>
+          구독자 범위 내 채널: ${subStats.inRange}개
+        </div>
+        <div style="font-size:12px;color:var(--muted)">필터 범위를 넓히거나 "필터 초기화" 버튼을 눌러 전체 결과를 확인하세요.</div>
+      </div>`;
+      return;
+    }
+
+    // 7) 정렬 & 렌더링
+    sortItems(filteredItems, els.sortBy.value);
+    render(filteredItems);
+
+    if(filterResult.filteredCount < filterResult.originalCount){
+      const filterRate = ((filterResult.filteredCount / filterResult.originalCount) * 100).toFixed(1);
+      setStatus(`완료 (전체 ${filterResult.originalCount}개 중 ${filterResult.filteredCount}개 표시, ${filterRate}%)`);
+      if(filterRate < 20){
+        // 필터가 너무 엄격할 때 경고 표시
+        const warning = document.createElement('div');
+        warning.style.cssText = 'background:rgba(255,193,7,.2);border:1px solid rgba(255,193,7,.5);padding:10px;border-radius:8px;margin-top:10px;font-size:12px;color:#ffc107';
+        warning.textContent = `⚠️ 필터 조건이 엄격합니다. 전체의 ${filterRate}%만 표시되고 있습니다. 필터를 완화하면 더 많은 결과를 볼 수 있습니다.`;
+        els.results.insertBefore(warning, els.results.firstChild);
+      }
+    } else {
+      setStatus('완료');
+    }
+  }catch(err){
+    console.error(err);
+    setStatus('오류 발생');
+    els.results.innerHTML = `<div class="error">${err.message}</div>`;
+  }
+}
+
+function paginate(which){
+  if(which==='next' && pageToken.next){ pageToken.index++; runSearch(pageToken.next); }
+  if(which==='prev' && pageToken.prev){ pageToken.index=Math.max(0,pageToken.index-1); runSearch(pageToken.prev); }
+}
+
+// ISO 8601 PT#M#S → mm:ss
+function parseISO8601(d){
+  if(!d) return '';
+  const m = d.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if(!m) return '';
+  const h = parseInt(m[1]||0,10), mi=parseInt(m[2]||0,10), s=parseInt(m[3]||0,10);
+  const total = h*3600+mi*60+s;
+  const hh = Math.floor(total/3600);
+  const mm = Math.floor((total%3600)/60).toString().padStart(2,'0');
+  const ss = Math.floor(total%60).toString().padStart(2,'0');
+  return hh>0? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+init();
+</script>
+</body>
+</html>
