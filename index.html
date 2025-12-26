@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YouTube Native + Insight V3.2 (Region + VPH + Deep 50/100/200)</title>
+  <title>YouTube Trend Search V1.0(2025/12/26)</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -285,7 +285,7 @@
   <div class="container">
     <header>
       <div class="flex-col">
-        <h1>🔥 YouTube Native + Insight V3.2</h1>
+        <h1>🔥 YouTube Trend Search  V1.0 Build(2025/12/26)</h1>
         <span style="font-size:12px; color:#888;">Region + VPH/Likes/Comments + Deep 50/100/200</span>
       </div>
       <div class="flex">
@@ -305,6 +305,7 @@
             <option value="24h">오늘 (24시간)</option>
             <option value="7d">이번 주 (7일)</option>
             <option value="30d">이번 달 (30일)</option>
+            <option value="60d">2달 전 (60일)</option>
             <option value="1y">올해 (1년)</option>
           </select>
         </div>
@@ -314,8 +315,7 @@
           <select id="apiDuration">
             <option value="any" selected>전체 길이</option>
             <option value="short">4분 미만 (Short)</option>
-            <option value="medium">4분 ~ 20분 (Medium)</option>
-            <option value="long">20분 초과 (Long)</option>
+            <option value="long">4분 이상 (Long)</option>
           </select>
         </div>
 
@@ -353,6 +353,31 @@
             <option value="50" selected>50개 (기본/쿼터 절약)</option>
             <option value="100">100개</option>
             <option value="200">200개</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">👁️ 조회수 필터</span>
+          <select id="viewCountFilter">
+            <option value="0" selected>제한 없음</option>
+            <option value="10000">1만회 이상</option>
+            <option value="20000">2만회 이상</option>
+            <option value="30000">3만회 이상</option>
+            <option value="40000">4만회 이상</option>
+            <option value="50000">5만회 이상</option>
+            <option value="100000">10만회 이상</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">👥 구독자 필터</span>
+          <select id="subscriberFilter">
+            <option value="0" selected>제한 없음</option>
+            <option value="5000">5천명 이하</option>
+            <option value="10000">1만명 이하</option>
+            <option value="20000">2만명 이하</option>
+            <option value="30000">3만명 이하</option>
+            <option value="50000">5만명 이하</option>
           </select>
         </div>
       </div>
@@ -451,6 +476,7 @@
         case "24h": now.setHours(now.getHours() - 24); break;
         case "7d": now.setDate(now.getDate() - 7); break;
         case "30d": now.setDate(now.getDate() - 30); break;
+        case "60d": now.setDate(now.getDate() - 60); break;
         case "1y": now.setFullYear(now.getFullYear() - 1); break;
       }
       return now.toISOString();
@@ -482,40 +508,82 @@
       rawData = [];
 
       try {
-        // ✅ maxItems 기반 페이지 수 계산: 50->1, 100->2, 200->4
         const MAX_PAGES = Math.max(1, Math.ceil(maxItems / 50));
-
         let videoItems = [];
-        let nextPageToken = "";
-        let pagesFetched = 0;
 
-        while (pagesFetched < MAX_PAGES) {
-          let searchUrl =
-            `https://www.googleapis.com/youtube/v3/search?part=snippet` +
-            `&q=${encodeURIComponent(keyword)}` +
-            `&type=video&maxResults=50&key=${API_KEY}`;
+        if (apiDuration === "long") {
+          const durations = ["medium", "long"];
+          for (const duration of durations) {
+            let nextPageToken = "";
+            let pagesFetched = 0;
+            const targetItems = Math.ceil(maxItems / durations.length);
 
-          if (apiRegion) searchUrl += `&regionCode=${encodeURIComponent(apiRegion)}`;
+            while (pagesFetched < Math.ceil(targetItems / 50)) {
+              let searchUrl =
+                `https://www.googleapis.com/youtube/v3/search?part=snippet` +
+                `&q=${encodeURIComponent(keyword)}` +
+                `&type=video&maxResults=50&key=${API_KEY}`;
 
-          searchUrl += `&order=${apiOrder}`;
-          if (apiDuration !== "any") searchUrl += `&videoDuration=${apiDuration}`;
-          if (publishedAfter) searchUrl += `&publishedAfter=${publishedAfter}`;
-          if (nextPageToken) searchUrl += `&pageToken=${nextPageToken}`;
+              if (apiRegion) searchUrl += `&regionCode=${encodeURIComponent(apiRegion)}`;
 
-          const searchRes = await fetch(searchUrl);
-          const searchJson = await searchRes.json();
+              searchUrl += `&order=${apiOrder}`;
+              searchUrl += `&videoDuration=${duration}`;
+              if (publishedAfter) searchUrl += `&publishedAfter=${publishedAfter}`;
+              if (nextPageToken) searchUrl += `&pageToken=${nextPageToken}`;
 
-          if (searchJson.error) throw new Error(searchJson.error.message || "YouTube API 오류");
-          if (!searchJson.items || searchJson.items.length === 0) break;
+              const searchRes = await fetch(searchUrl);
+              const searchJson = await searchRes.json();
 
-          videoItems = videoItems.concat(searchJson.items);
-          nextPageToken = searchJson.nextPageToken;
-          pagesFetched++;
+              if (searchJson.error) throw new Error(searchJson.error.message || "YouTube API 오류");
+              if (!searchJson.items || searchJson.items.length === 0) break;
 
-          if (!nextPageToken) break;
+              videoItems = videoItems.concat(searchJson.items);
+              nextPageToken = searchJson.nextPageToken;
+              pagesFetched++;
+
+              if (!nextPageToken || videoItems.length >= maxItems) break;
+            }
+            if (videoItems.length >= maxItems) break;
+          }
+        } else {
+          let nextPageToken = "";
+          let pagesFetched = 0;
+
+          while (pagesFetched < MAX_PAGES) {
+            let searchUrl =
+              `https://www.googleapis.com/youtube/v3/search?part=snippet` +
+              `&q=${encodeURIComponent(keyword)}` +
+              `&type=video&maxResults=50&key=${API_KEY}`;
+
+            if (apiRegion) searchUrl += `&regionCode=${encodeURIComponent(apiRegion)}`;
+
+            searchUrl += `&order=${apiOrder}`;
+            if (apiDuration !== "any") searchUrl += `&videoDuration=${apiDuration}`;
+            if (publishedAfter) searchUrl += `&publishedAfter=${publishedAfter}`;
+            if (nextPageToken) searchUrl += `&pageToken=${nextPageToken}`;
+
+            const searchRes = await fetch(searchUrl);
+            const searchJson = await searchRes.json();
+
+            if (searchJson.error) throw new Error(searchJson.error.message || "YouTube API 오류");
+            if (!searchJson.items || searchJson.items.length === 0) break;
+
+            videoItems = videoItems.concat(searchJson.items);
+            nextPageToken = searchJson.nextPageToken;
+            pagesFetched++;
+
+            if (!nextPageToken) break;
+          }
         }
 
-        // ✅ 혹시 마지막 페이지가 50개 꽉 차서 maxItems를 넘으면 잘라냄
+        const uniqueVideoIds = new Set();
+        videoItems = videoItems.filter(item => {
+          const videoId = item.id.videoId;
+          if (uniqueVideoIds.has(videoId)) return false;
+          uniqueVideoIds.add(videoId);
+          return true;
+        });
+
         videoItems = videoItems.slice(0, maxItems);
 
         if (videoItems.length === 0) throw new Error("검색 결과가 없습니다.");
@@ -593,6 +661,17 @@
             tags
           };
         }).filter(Boolean);
+
+        const viewCountFilter = parseInt(document.getElementById("viewCountFilter").value, 10) || 0;
+        const subscriberFilter = parseInt(document.getElementById("subscriberFilter").value, 10) || 0;
+
+        if (viewCountFilter > 0) {
+          rawData = rawData.filter(item => item.viewCount >= viewCountFilter);
+        }
+
+        if (subscriberFilter > 0) {
+          rawData = rawData.filter(item => item.subCount <= subscriberFilter);
+        }
 
         render();
       } catch (e) {
